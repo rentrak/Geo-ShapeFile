@@ -13,7 +13,7 @@ use Geo::ShapeFile::Shape;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = ();
 our @EXPORT = (); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.1 $, 10));
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.4 $, 10));
 
 # Preloaded methods go here.
 sub new {
@@ -23,7 +23,14 @@ sub new {
 	my $self = {};
 
 	$self->{filebase} = shift || croak "Must specify filename!";
-	$self->{filebase} =~ s/\.\w{3}//;
+	$self->{filebase} =~ s/\.\w{3}$//;
+
+	$self->{_enable_caching} = {
+		shp				=> 1,
+		dbf				=> 1,
+		shx				=> 1,
+		shapes_in_area	=> 1,
+	};
 
 	bless($self, $class);
 
@@ -33,6 +40,12 @@ sub new {
 		shp	=> {},
 		dbf	=> {},
 		shx	=> {},
+	};
+	$self->{_object_cache} = {
+		shp	=> {},
+		dbf	=> {},
+		shx	=> {},
+		shapes_in_area => {},
 	};
 
 	if(-f $self->{filebase}.".shx") {
@@ -57,6 +70,33 @@ sub new {
 	}
 
 	return $self;
+}
+
+sub caching {
+	my $self = shift;
+	my $what = shift;
+
+	if(@_) {
+		$self->{_enable_caching}->{$what} = shift;
+	}
+	return $self->{_enable_caching}->{$what};
+}
+
+sub cache {
+	my $self = shift;
+	my $type = shift;
+	my $obj = shift;
+
+	if($self->{_change_cache}->{$type} && $self->{_change_cache}->{$type}->{$obj}) {
+		return $self->{_change_cache}->{$type}->{$obj};
+	}
+
+	return unless $self->caching($type);
+
+	if($@) {
+		$self->{_object_cache}->{$type}->{$obj} = shift;
+	}
+	return $self->{_object_cache}->{$type}->{$obj};
 }
 
 sub read_shx_header { shift()->read_shx_shp_header('shx',@_); }
@@ -100,7 +140,7 @@ sub read_dbf_header {
 		$self->{dbf_num_records},
 		$self->{dbf_header_length},
 		$self->{dbf_record_length},
-	) = unpack("c4 l s s", $self->{dbf_header});
+	) = unpack("C4 V v v", $self->{dbf_header});
 
 	my $ls = $self->{dbf_header_length} +
 		($self->{dbf_num_records}*$self->{dbf_record_length}) +
@@ -171,9 +211,9 @@ sub generate_dbf_header {
 		$self->{dbf_num_records},
 		$self->{dbf_header_length},
 		$self->{dbf_record_length},
-	) = unpack("c4 l s s", $self->{dbf_header});
+	) = unpack("C4 V v v", $self->{dbf_header});
 
-	$self->{_change_cache}->{dbf_cache}->{header} = pack("c4 l s s",
+	$self->{_change_cache}->{dbf_cache}->{header} = pack("C4 V v v",
 		3,
 		(localtime)[5],
 		(localtime)[4]+1,
@@ -244,32 +284,30 @@ sub get_dbf_record {
 	my $self = shift;
 	my $entry = shift;
 
-	if($self->{_change_cache}->{dbf_cache}->{$entry}) {
-		if(wantarray) {
-			return %{$self->{_change_cache}->{dbf}->{$entry}};
-		} else {
-			return $self->{_change_cache}->{dbf}->{$entry};
-		}
+	my $dbf = $self->cache('dbf',$entry);
+	if(! $dbf) {
+		$entry--; # make entry 0-indexed
+
+		my $record = $self->get_bytes(
+			'dbf',
+			$self->{dbf_header_length}+($self->{dbf_record_length} * $entry),
+			$self->{dbf_record_length}+1, # +1 for deleted flag
+		);
+		my($del,@data) = unpack("c".$self->{dbf_record_template},$record);
+
+		map { s/^\s*//; s/\s*$//; } @data;
+
+		my %record = ();
+		@record{@{$self->{dbf_field_names}}} = @data;
+		$record{_deleted} = (ord $del == 0x2A);
+		$dbf = {%record};
+		$self->cache('dbf',$entry+1,$dbf);
 	}
 
-	$entry--; # make entry 0-indexed
-
-	my $record = $self->get_bytes(
-		'dbf',
-		$self->{dbf_header_length}+($self->{dbf_record_length} * $entry),
-		$self->{dbf_record_length}+1, # +1 for deleted flag
-	);
-	my($del,@data) = unpack("c".$self->{dbf_record_template},$record);
-
-	map { s/^\s*//; s/\s*$//; } @data;
-
-	my %record = ();
-	@record{@{$self->{dbf_field_names}}} = @data;
-	$record{_deleted} = (ord $del == 0x2A);
 	if(wantarray) {
-		return %record
+		return %{$dbf};
 	} else {
-		return {%record};
+		return $dbf;
 	}
 }
 
@@ -422,10 +460,13 @@ sub get_shx_record {
 
 	croak "must specify entry index" unless $entry;
 
-	my $record = $self->get_bytes('shx',(($entry - 1) * 8) + 100,8);
-	my($offset,$content_length) = unpack("N N",$record);
-
-	return($offset,$content_length);
+	my $shx = $self->cache('shx',$entry);
+	unless($shx) {
+		my $record = $self->get_bytes('shx',(($entry - 1) * 8) + 100,8);
+		$shx = [unpack("N N",$record)];
+		$self->cache('shx',$entry,$shx);
+	}
+	return(@{$shx});
 }
 
 sub get_shp_record_header {
@@ -440,6 +481,7 @@ sub get_shp_record_header {
 	return($number,$content_length);
 }
 
+# TODO - cache this
 sub shapes_in_area {
 	my $self = shift;
 	my @area = @_; # x_min,y_min,x_max,y_max,
@@ -520,12 +562,16 @@ sub get_shp_record {
 	my $self = shift;
 	my $entry = shift;
 
-	my($offset,$content_length) = $self->get_shx_record($entry);
+	my $shape = $self->cache('shp',$entry);
+	unless($shape) {
+		my($offset,$content_length) = $self->get_shx_record($entry);
 
-	my $record = $self->get_bytes('shp',$offset*2,($content_length*2)+8);
+		my $record = $self->get_bytes('shp',$offset*2,($content_length*2)+8);
 
-	my $shape = new Geo::ShapeFile::Shape();
-	$shape->parse_shp($record);
+		$shape = new Geo::ShapeFile::Shape();
+		$shape->parse_shp($record);
+		$self->cache('shp',$entry,$shape);
+	}
 
 	return $shape;
 }
@@ -541,9 +587,10 @@ sub get_handle {
 	unless($self->{$han}) {
 		$self->{$han} = new IO::File;
 		my $file = join('.', $self->{filebase},$which);
-		unless($self->{$han}->open($file,'r')) {
+		unless($self->{$han}->open($file, O_RDONLY | O_BINARY)) {
 			croak "Couldn't get file handle for $file: $!";
 		}
+		binmode($self->{$han}); # fix windows bug reported by Patrick Dughi
 	}
 
 	return $self->{$han};
@@ -764,8 +811,8 @@ Geo::ShapeFile::Shape object.
 
 =item shapes_in_area($x_min,$y_min,$x_max,$y_max)
 
-Returns an array of Geo::ShapeFile::Shape objects, consisting of all the
-shapes in the current data that overlap with the area specified.
+Returns an array of integers, consisting of the indices of the shapes that
+overlap with the area specified.
 
 =item check_in_area($x1_min,$y1_min,$x1_max,$y1_max,$x2_min,$x2_max,$y2_min,$y2_max)
 

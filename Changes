@@ -1,12 +1,24 @@
 Revision history for Perl extension Geo::ShapeFile.
 
 0.01  Wed Dec 11 15:27:53 2002
-	- original version; created by h2xs 1.22 with options
-		-X Geo::Shape
+    - original version; created by h2xs 1.22 with options
+    	-X Geo::ShapeFile
 
 1.5   Sun Feb 16 11:35:00 2003
-	- initial release
+    - initial release
 
-2.0   No Date Yet
-	- fixed missing prerequisites in Makefile.PL
-	- initial support for creating new shapefiles
+2.10  Mon Mar 17 14:59:00 2003
+    - fixed missing prerequisites in Makefile.PL
+    - initial support for creating new shapefiles
+    - removed some less-than-useful required modules
+
+2.11
+    - fixed windows bug reported by Patrick Dughi
+
+2.40
+    - object caching
+    - fixed another windows bug reported by A. B. Jones
+    - fixed dumb regexp bug that wouldn't let you use directories with a dot in
+      them (doh!).  Reported by Leo WEST
+    - fixed documentation bug for shapes_in_area reported by Chad Harp
+    - fixed endianess bug reported by Daniel Gildea

@@ -22,7 +22,7 @@ our @ISA = qw(Exporter Geo::ShapeFile);
 our %EXPORT_TAGS = ( 'all' => [ qw( ) ] ); 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } ); 
 our @EXPORT = qw( ); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.1 $, 10));
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.2 $, 10));
 
 sub new {
     my $proto = shift;
@@ -673,7 +673,7 @@ Geo::ShapeFile
 
 =head1 AUTHOR
 
-Jason Kohles, E<lt>jason@localdomainE<gt>
+Jason Kohles, E<lt>email@jasonkohles.com<gt>
 
 =head1 COPYRIGHT AND LICENSE
 

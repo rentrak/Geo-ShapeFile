@@ -21,7 +21,10 @@ This module requires these other modules and libraries:
 
   Carp
   IO::File
-  Data::Dumper
+
+EXAMPLES
+
+Some example scripts (hopefully documented) can be found in the eg/ directory.
 
 COPYRIGHT AND LICENCE
 
