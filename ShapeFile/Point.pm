@@ -111,7 +111,13 @@ sub angle_to {
 	my($p1,$p2) = @_;
 
 	my $dp = $p2 - $p1;
-	rad2deg( atan( $dp->Y / $dp->X ) );
+	if($dp->Y && $dp->X) {	# two distinct points
+		return rad2deg( atan( $dp->Y / $dp->X ) );
+	} elsif($dp->Y) {		# same X value
+		return $dp->Y > 0 ? 90 : -90;
+	} else {				# same point
+		return 0;
+	}
 }
 
 sub add { mathemagic('add',@_); }
@@ -324,7 +330,8 @@ calculation.
 
 =item angle_to($point);
 
-Returns the angle (in degress) from this point to some other point.
+Returns the angle (in degress) from this point to some other point.  Returns
+0 if the two points are in the same location.
 
 =back
 

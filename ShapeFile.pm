@@ -13,7 +13,7 @@ use Geo::ShapeFile::Shape;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = ();
 our @EXPORT = (); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.4 $, 10));
+our $VERSION = '2.50';
 
 # Preloaded methods go here.
 sub new {
@@ -141,11 +141,19 @@ sub read_dbf_header {
 		$self->{dbf_header_length},
 		$self->{dbf_record_length},
 	) = unpack("C4 V v v", $self->{dbf_header});
+	# unpack changed from c4 l s s to fix endianess problem
+	# reported by Daniel Gildea
 
 	my $ls = $self->{dbf_header_length} +
-		($self->{dbf_num_records}*$self->{dbf_record_length}) +
-		1;
+		($self->{dbf_num_records}*$self->{dbf_record_length});
 	my $li = -s $self->{filebase}.".dbf";
+
+	# some shapefiles (such as are produced by the NOAA NESDIS) don't
+	# have a end-of-file marker in their dbf files, Aleksandar Jelenak
+	# says the ESRI tools don't have a problem with this, so we shouldn't
+	# either
+	my $last_byte = $self->get_bytes('dbf',$li-1,1);
+	$ls += 1 if (ord $last_byte == 0x1A);
 
 	if($ls != $li) {
 		croak "dbf: file wrong size (should be $ls, but found $li)";
@@ -388,10 +396,10 @@ sub area_contains_point {
 	my ($x_min,$y_min,$x_max,$y_max) = @_;
 
     return (
-        ($point->X > $x_min) &&
-        ($point->X < $x_max) &&
-        ($point->Y > $y_min) &&
-        ($point->Y < $y_max)
+        ($point->X >= $x_min) &&
+        ($point->X <= $x_max) &&
+        ($point->Y >= $y_min) &&
+        ($point->Y <= $y_max)
     );
 }
 
@@ -812,7 +820,13 @@ Geo::ShapeFile::Shape object.
 =item shapes_in_area($x_min,$y_min,$x_max,$y_max)
 
 Returns an array of integers, consisting of the indices of the shapes that
-overlap with the area specified.
+overlap with the area specified.  Currently this is a very oversimplified
+function that actually finds shapes that have any point that falls within
+the specified bounding box.  Currently it may miss some shapes that actually
+do overlap with the specified area, if there are two points outside the area
+that cause an edge to pass through the area, but neither of the end points
+of that edge actually fall within the area specified.  Patches to make this
+function more useful would be welcome.
 
 =item check_in_area($x1_min,$y1_min,$x1_max,$y1_max,$x2_min,$x2_max,$y2_min,$y2_max)
 

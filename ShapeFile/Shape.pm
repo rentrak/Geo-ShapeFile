@@ -22,7 +22,7 @@ our @ISA = qw(Exporter Geo::ShapeFile);
 our %EXPORT_TAGS = ( 'all' => [ qw( ) ] ); 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } ); 
 our @EXPORT = qw( ); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.2 $, 10));
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.3 $, 10));
 
 sub new {
     my $proto = shift;
@@ -303,9 +303,6 @@ sub extract_ints {
 	my $template = ($end =~ /^l/i)?'V':'N';
 
 	$self->extract_and_unpack(4, $template, @what);
-	foreach(@what) {
-		$self->{$_} = $self->{$_};
-	}
 }
 
 sub extract_count_ints {
@@ -317,7 +314,7 @@ sub extract_count_ints {
 	my $template = ($end =~ /^l/i)?'V':'N';
 
 	my $tmp = substr($self->{shp_data},0,($count*4),'');
-	my @tmp = unpack($template.($count*4),$tmp);
+	my @tmp = unpack($template.$count,$tmp);
 	#my @tmp = unpack($template."[$count]",$tmp);
 		
 	$self->{$label} = [@tmp];
@@ -337,7 +334,7 @@ sub extract_count_doubles {
 
 	my $tmp = substr($self->{shp_data},0,$count*8,'');
 	#my @tmp = unpack("d[$count]",$tmp);
-	my @tmp = unpack("d".($count*8),$tmp);
+	my @tmp = unpack("d".$count,$tmp);
 
 	$self->{$label} = [@tmp];
 }
