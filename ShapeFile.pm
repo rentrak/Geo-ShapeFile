@@ -1,6 +1,6 @@
 package Geo::ShapeFile;
 
-use 5.008;
+#use 5.008;
 use strict;
 use warnings;
 
@@ -9,22 +9,11 @@ use AutoLoader qw(AUTOLOAD);
 use Carp;
 use IO::File;
 use Geo::ShapeFile::Shape;
-use Data::HexDump;
-use Data::Dumper;
 
 our @ISA = qw(Exporter);
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration	use Geo::ShapeFile ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
-our %EXPORT_TAGS = ( 'all' => [ qw( ) ] );
-our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } ); 
-our @EXPORT = qw( ); 
-our $VERSION = substr q$Revision: 1.5 $, 10;
+our @EXPORT_OK = ();
+our @EXPORT = (); 
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.1 $, 10));
 
 # Preloaded methods go here.
 sub new {
@@ -38,18 +27,28 @@ sub new {
 
 	bless($self, $class);
 
+	$self->{_change_cache} = {
+		shape_type	=> undef,
+		records		=> undef,
+		shp	=> {},
+		dbf	=> {},
+		shx	=> {},
+	};
+
 	if(-f $self->{filebase}.".shx") {
 		$self->read_shx_header();
 		$self->{has_shx} = 1;
 	} else {
 		$self->{has_shx} = 0;
 	}
+
 	if(-f $self->{filebase}.".shp") {
 		$self->read_shp_header();
 		$self->{has_shp} = 1;
 	} else {
 		$self->{has_shp} = 0;
 	}
+
 	if(-f $self->{filebase}.".dbf") {
 		$self->read_dbf_header();
 		$self->{has_dbf} = 1;
@@ -74,7 +73,10 @@ sub read_shx_shp_header {
 		$self->{$which."_x_max"}, $self->{$which."_y_max"},
 		$self->{$which."_z_min"}, $self->{$which."_z_max"},
 		$self->{$which."_m_min"}, $self->{$which."_m_max"},
-    ) = unpack("N x[N5] N V2 d8",$self->{$which."_header"});
+    ) = unpack("N x20 N V2 d8",$self->{$which."_header"});
+    # = unpack("N x[N5] N V2 d8",$self->{$which."_header"});
+	# the N5 are 5 reserved longs, which are not used in this version of the
+	# header, I replaced it with x20, to work on perl 5.6.0
 
 	return 1;
 }
@@ -157,9 +159,98 @@ sub read_dbf_header {
 	return 1;
 }
 
+sub generate_dbf_header {
+	my $self = shift;
+
+	#$self->{dbf_header} = $self->get_bytes('dbf',0,12);
+	(
+		$self->{dbf_version},
+		$self->{dbf_updated_year},
+		$self->{dbf_updated_month},
+		$self->{dbf_updated_day},
+		$self->{dbf_num_records},
+		$self->{dbf_header_length},
+		$self->{dbf_record_length},
+	) = unpack("c4 l s s", $self->{dbf_header});
+
+	$self->{_change_cache}->{dbf_cache}->{header} = pack("c4 l s s",
+		3,
+		(localtime)[5],
+		(localtime)[4]+1,
+		(localtime)[3],
+		0, # TODO - num_records,
+		0, # TODO - header_length,
+		0, # TODO - record_length,
+	);
+
+#	my $ls = $self->{dbf_header_length} +
+#		($self->{dbf_num_records}*$self->{dbf_record_length}) +
+#		1;
+#	my $li = -s $self->{filebase}.".dbf";
+#
+#	if($ls != $li) {
+#		croak "dbf: file wrong size (should be $ls, but found $li)";
+#	}
+#
+#	my $header = $self->get_bytes('dbf',32,$self->{dbf_header_length}-32);
+#	my $count = 0;
+#	$self->{dbf_header_info} = [];
+#
+#	while($header) {
+#		my $tmp = substr($header,0,32,'');
+#		my $chr = substr($tmp,0,1);
+#
+#		if(ord $chr == 0x0D) { last; }
+#		if(length($tmp) < 32) { last; }
+#
+#		my %tmp = ();
+#		(
+#			$tmp{name},
+#			$tmp{type},
+#			$tmp{size},
+#			$tmp{decimals}
+#		) = unpack("Z11 Z x4 C2",$tmp);
+#
+#		$self->{dbf_field_info}->[$count] = {%tmp};
+#		
+#		$count++;
+#	}
+#	$self->{dbf_fields} = $count;
+#	if($count < 1) { croak "dbf: Not enough fields ($count < 1)"; }
+#
+#	my @template = ();
+#	foreach(@{$self->{dbf_field_info}}) {
+#		if($_->{size} < 1) {
+#			croak "dbf: Field $_->{name} too short ($_->{size} bytes)";
+#		}
+#		if($_->{size} > 4000) {
+#			croak "dbf: Field $_->{name} too long ($_->{size} bytes)";
+#		}
+#
+#		push(@template,"A".$_->{size});
+#	}
+#	$self->{dbf_record_template} = join(' ',@template);
+#
+#	my @field_names = ();
+#	foreach(@{$self->{dbf_field_info}}) {
+#		push(@field_names,$_->{name});
+#	}
+#	$self->{dbf_field_names} = [@field_names];
+#
+#	return 1;
+}
+
 sub get_dbf_record {
 	my $self = shift;
 	my $entry = shift;
+
+	if($self->{_change_cache}->{dbf_cache}->{$entry}) {
+		if(wantarray) {
+			return %{$self->{_change_cache}->{dbf}->{$entry}};
+		} else {
+			return $self->{_change_cache}->{dbf}->{$entry};
+		}
+	}
 
 	$entry--; # make entry 0-indexed
 
@@ -180,6 +271,14 @@ sub get_dbf_record {
 	} else {
 		return {%record};
 	}
+}
+
+sub set_dbf_record {
+	my $self = shift;
+	my $entry = shift;
+	my %record = @_;
+
+	$self->{_change_cache}->{dbf}->{$entry} = {%record};
 }
 
 sub get_shp_shx_header_value {
@@ -267,12 +366,26 @@ sub bounds_contains_point {
     );
 }
 
-sub file_version { shift()->get_shp_shx_header_value('file_version'); }
-sub shape_type { shift()->get_shp_shx_header_value('shape_type'); }
+sub file_version {
+	shift()->get_shp_shx_header_value('file_version');
+}
+
+sub shape_type {
+	my $self = shift;
+
+	if(defined $self->{_change_cache}->{shape_type}) {
+		return $self->{_change_cache}->{shape_type};
+	} else {
+		return $self->get_shp_shx_header_value('shape_type');
+	}
+}
 
 sub shapes {
 	my $self = shift;
 
+	if(defined $self->{_change_cache}->{records}) {
+		return $self->{_change_cache}->{records};
+	}
 	unless($self->{shx_file_length}) { $self->read_shx_header(); }
 
 	my $filelength = $self->{shx_file_length};
@@ -282,6 +395,10 @@ sub shapes {
 
 sub records {
 	my $self = shift;
+
+	if(defined $self->{_change_cache}->{records}) {
+		return $self->{_change_cache}->{records};
+	}
 
 	if($self->{shx_file_length}) {
 		my $filelength = $self->{shx_file_length};
@@ -423,8 +540,9 @@ sub get_handle {
 	my $han = $which."_handle";
 	unless($self->{$han}) {
 		$self->{$han} = new IO::File;
-		unless($self->{$han}->open($self->{filebase}.".".$which,'r')) {
-			croak "Couldn't get file handle for $which: $!";
+		my $file = join('.', $self->{filebase},$which);
+		unless($self->{$han}->open($file,'r')) {
+			croak "Couldn't get file handle for $file: $!";
 		}
 	}
 

@@ -1,14 +1,20 @@
 package Geo::ShapeFile::Point;
 
-use 5.008;
+# TODO - add dimension operators (to specify if 2 or 3 dimensional point)
+#use 5.008;
 use strict;
 use warnings;
-use Data::Dumper;
+use Math::Trig;
+use Carp;
 
 use overload
-	'==' => 'eq',
-	'eq' => 'eq',
-	'""' => 'stringify',
+	'=='	=> 'eq',
+	'eq'	=> 'eq',
+	'""'	=> 'stringify',
+	'+'		=> \&add,
+	'-'		=> \&subtract,
+	'*'		=> \&multiply,
+	'/'		=> \&divide,
 ;
 
 my %config = (
@@ -22,7 +28,7 @@ use AutoLoader qw(AUTOLOAD);
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw( ); 
 our @EXPORT = qw( ); 
-our $VERSION = substr q$Revision: 1.3 $, 10;
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.1 $, 10));
 
 sub new {
     my $proto = shift;
@@ -50,6 +56,16 @@ sub X { shift()->var('X',@_); }
 sub Y { shift()->var('Y',@_); }
 sub Z { shift()->var('Z',@_); }
 sub M { shift()->var('M',@_); }
+
+# TODO - document these
+sub x_min { shift()->var('X'); }
+sub x_max { shift()->var('X'); }
+sub y_min { shift()->var('Y'); }
+sub y_max { shift()->var('Y'); }
+sub z_min { shift()->var('Z'); }
+sub z_max { shift()->var('Z'); }
+sub m_min { shift()->var('M'); }
+sub m_max { shift()->var('M'); }
 
 sub import {
 	my $self = shift;
@@ -82,6 +98,155 @@ sub stringify {
 	}
 	my $r = "Point(".join(',',@foo).")";
 }
+
+sub distance_from {
+	my($p1,$p2) = @_;
+
+	my $dp = $p2->subtract($p1);
+	sqrt( ($dp->X ** 2) + ($dp->Y **2) );
+}
+
+sub angle_to {
+	my($p1,$p2) = @_;
+
+	my $dp = $p2 - $p1;
+	rad2deg( atan( $dp->Y / $dp->X ) );
+}
+
+sub add { mathemagic('add',@_); }
+sub subtract { mathemagic('subtract',@_); }
+sub multiply { mathemagic('multiply',@_); }
+sub divide { mathemagic('divide',@_); }
+
+sub mathemagic {
+	my($op,$l,$r,$reverse) = @_;
+
+	if($reverse) { ($l,$r) = ($r,$l); } # put them back in the right order
+	my($left,$right);
+
+	if(UNIVERSAL::isa($l,"Geo::ShapeFile::Point")) { $left = 'point'; }
+	if(UNIVERSAL::isa($r,"Geo::ShapeFile::Point")) { $right = 'point'; }
+
+	if($l =~ /^[\d\.]+$/) { $left = 'number'; }
+	if($r =~ /^[\d\.]+$/) { $right = 'number'; }
+
+	unless($left) { croak "Couldn't identify $l for $op"; }
+	unless($right) { croak "Couldn't identify $r for $op"; }
+
+	my $function = join('_',$op,$left,$right);
+
+	unless(defined &{$function}) {
+		croak "Don't know how to $op $left and $right";
+	} else {
+		no strict 'refs';
+		return $function->($l,$r);
+	}
+}
+
+sub add_point_point {
+	my($p1,$p2) = @_;
+
+	my $z;
+	if(defined($p2->Z) && defined($p1->Z)) { $z = ($p2->Z + $p1->Z); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p2->X + $p1->X),
+		Y => ($p2->Y + $p1->Y),
+		Z => $z,
+	);
+}
+
+sub add_point_number {
+	my($p1,$n) = @_;
+
+	my $z;
+	if(defined($p1->Z)) { $z = ($p1->Z + $n); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p1->X + $n),
+		Y => ($p1->Y + $n),
+		Z => $z,
+	);
+}
+sub add_number_point { add_point_number(@_); }
+
+sub subtract_point_point {
+	my($p1,$p2) = @_;
+
+	my $z;
+	if(defined($p2->Z) && defined($p1->Z)) { $z = ($p2->Z - $p1->Z); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p2->X - $p1->X),
+		Y => ($p2->Y - $p1->Y),
+		Z => $z,
+	);
+}
+sub subtract_point_number {
+	my($p1,$n) = @_;
+
+	my $z;
+	if(defined($p1->Z)) { $z = ($p1->Z - $n); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p1->X - $n),
+		Y => ($p1->Y - $n),
+		Z => $z,
+	);
+}
+sub subtract_number_point { subtract_point_number(reverse @_); }
+
+sub multiply_point_point {
+	my($p1,$p2) = @_;
+
+	my $z;
+	if(defined($p2->Z) && defined($p1->Z)) { $z = ($p2->Z * $p1->Z); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p2->X * $p1->X),
+		Y => ($p2->Y * $p1->Y),
+		Z => $z,
+	);
+}
+sub multiply_point_number {
+	my($p1,$n) = @_;
+
+	my $z;
+	if(defined($p1->Z)) { $z = ($p1->Z * $n); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p1->X * $n),
+		Y => ($p1->Y * $n),
+		Z => $z,
+	);
+}
+sub multiply_number_point { multiply_point_number(reverse @_); }
+
+sub divide_point_point {
+	my($p1,$p2) = @_;
+
+	my $z;
+	if(defined($p2->Z) && defined($p1->Z)) { $z = ($p2->Z / $p1->Z); }
+		
+	new Geo::ShapeFile::Point(
+		X => ($p2->X / $p1->X),
+		Y => ($p2->Y / $p1->Y),
+		Z => $z,
+	);
+}
+sub divide_point_number {
+	my($p1,$n) = @_;
+
+	my $z;
+	if(defined($p1->Z)) { $z = ($p1->Z / $n); }
+	
+	new Geo::ShapeFile::Point(
+		X => ($p1->X / $n),
+		Y => ($p1->Y / $n),
+		Z => $z,
+	);
+}
+sub divide_number_point { divide_point_number(reverse @_); }
 
 1;
 __END__
@@ -128,7 +293,7 @@ will get the default behavior:
 
   use Geo::ShapeFile;
   use Geo::ShapeFile::Point comp_includes_m => 0, comp_includes_z => 0;
-  (Geo::ShapeFile alread imported Point for you)
+  (Geo::ShapeFile already imported Point for you)
 
 =head1 METHODS
 
@@ -142,6 +307,23 @@ and/or M values to be assigned to the point.
 =item X() Y() Z() M()
 
 Set/retrieve the X, Y, Z, or M values for this object.
+
+=item x_min() x_max() y_min() y_max()
+
+=item z_min() z_max() m_min() m_max()
+
+These methods are provided for compatibility with Geo::ShapeFile::Shape, but
+for points simply return the X, Y, Z, or M coordinates as appropriate.
+
+=item distance_from($point)
+
+Returns the distance between this point and the specified point.  Only
+considers the two-dimensional distance, altitude is not included in the
+calculation.
+
+=item angle_to($point);
+
+Returns the angle (in degress) from this point to some other point.
 
 =back
 

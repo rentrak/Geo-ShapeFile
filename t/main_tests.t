@@ -1,7 +1,6 @@
-# $Revision: 1.4 $
+# $Revision: 2.0 $
 use Test::More tests => 18651;
 use strict;
-use bignum;
 BEGIN {
 	use_ok('Geo::ShapeFile');
 	use_ok('Geo::ShapeFile::Shape');

@@ -1,6 +1,8 @@
 Geo/ShapeFile version 0.01
 ==========================
 
+    *** Please report bugs at http://rt.cpan.org/ ***
+
 Geo::ShapeFile is a perl library for reading ESRI shape files (such as
 those produced by the ESRI Arc/Info application.
 

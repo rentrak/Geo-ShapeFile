@@ -1,6 +1,6 @@
 package Geo::ShapeFile::Shape;
 
-use 5.008;
+#use 5.008;
 use strict;
 use warnings;
 use Carp;
@@ -9,8 +9,6 @@ require Exporter;
 use AutoLoader qw(AUTOLOAD);
 use Geo::ShapeFile;
 use Geo::ShapeFile::Point;
-use Data::HexDump;
-use Data::Dumper;
 
 our @ISA = qw(Exporter Geo::ShapeFile);
 
@@ -24,13 +22,34 @@ our @ISA = qw(Exporter Geo::ShapeFile);
 our %EXPORT_TAGS = ( 'all' => [ qw( ) ] ); 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } ); 
 our @EXPORT = qw( ); 
-our $VERSION = substr q$Revision: 1.3 $, 10;
+our $VERSION = sprintf("%.02f",(substr q$Revision: 2.1 $, 10));
 
 sub new {
     my $proto = shift;
     my $class = ref($proto) || $proto;
+	my %args = @_;
 
-    my $self = {};
+    my $self = {
+		shp_content_length	=> 0,
+		source				=> undef,
+		shp_points			=> [],
+		shp_num_points		=> 0,
+		shp_parts			=> [],
+		shp_record_number	=> undef,
+		shp_shape_type		=> undef,
+		shp_num_parts		=> 0,
+		shp_x_min			=> undef,
+		shp_x_max			=> undef,
+		shp_y_min			=> undef,
+		shp_y_max			=> undef,
+		shp_z_min			=> undef,
+		shp_z_max			=> undef,
+		shp_m_min			=> undef,
+		shp_m_max			=> undef,
+		shp_data			=> undef,
+	};
+
+	foreach(keys %args) { $self->{$_} = $args{$_}; }
 
     bless($self, $class);
 
@@ -57,12 +76,46 @@ sub parse_shp {
 			((length($self->{shp_data})>1)?'s':'')." remaining in buffer ".
 			"after parsing ".$self->shape_type_text()." #".
 			$self->shape_id();
-		carp HexDump $self->{shp_data};
 	}
 }
 
 sub parse_shp_Null {
 	my $self = shift;
+}
+
+# TODO - document this
+sub add_point {
+	my $self = shift;
+
+	if(@_ == 1) {
+		my $point = shift;
+		if($point->isa("Geo::ShapeFile::Point")) {
+			push(@{$self->{shp_points}}, $point);
+		}
+	} else {
+		my %point_opts = @_;
+
+		push(@{$self->{shp_points}}, new Geo::ShapeFile::Point(%point_opts));
+		$self->{shp_num_points}++;
+	}
+}
+
+# TODO - document this
+sub add_part {
+	my $self = shift;
+
+	push(@{$self->{shp_parts}},$self->{shp_num_parts}++);
+}
+
+# TODO - finish me
+sub calculate_bounds {
+	my $self = shift;
+
+	my %bounds = $self->find_bounds($self->points);
+	foreach(keys %bounds) {
+		$self->{"shp_".$_} = $bounds{$_};
+	}
+	return %bounds;
 }
 
 sub parse_shp_Point {
@@ -264,7 +317,8 @@ sub extract_count_ints {
 	my $template = ($end =~ /^l/i)?'V':'N';
 
 	my $tmp = substr($self->{shp_data},0,($count*4),'');
-	my @tmp = unpack($template."[$count]",$tmp);
+	my @tmp = unpack($template.($count*4),$tmp);
+	#my @tmp = unpack($template."[$count]",$tmp);
 		
 	$self->{$label} = [@tmp];
 }
@@ -282,7 +336,8 @@ sub extract_count_doubles {
 	my $label = shift;
 
 	my $tmp = substr($self->{shp_data},0,$count*8,'');
-	my @tmp = unpack("d[$count]",$tmp);
+	#my @tmp = unpack("d[$count]",$tmp);
+	my @tmp = unpack("d".($count*8),$tmp);
 
 	$self->{$label} = [@tmp];
 }
@@ -430,6 +485,80 @@ sub get_segments {
 	return @segments;
 }
 
+sub centroid {
+	my $self = shift;
+	my $part = shift;
+
+	my $cx = 0;
+	my $cy = 0;
+
+	my @points = ();
+	if($part) {
+		@points = $self->get_part($part);
+	} else {
+		@points = $self->points;
+	}
+
+	foreach(@points) { $cx += $_->X; $cy += $_->Y; }
+
+	new Geo::ShapeFile::Point(
+		X => ($cx * @points),
+		Y => ($cy * @points),
+	);
+}
+
+sub dump {
+	my $self = shift;
+
+	my $return = '';
+
+	#$self->points();
+	#$self->get_part();
+	#$self->x_min,x_max,y_min,y_max,z_min,z_max,m_min,m_max
+
+	$return .= sprintf("Shape Type: %s (id: %d)  Parts: %d   Points: %d\n",
+		$self->shape_type_text(),
+		$self->shape_id(),
+		$self->num_parts(),
+		$self->num_points(),
+	);
+
+	$return .= sprintf("\tX bounds(min=%s, max=%s)\n",
+		$self->x_min(),
+		$self->x_max(),
+	);
+
+	$return .= sprintf("\tY bounds(min=%s, max=%s)\n",
+		$self->y_min(),
+		$self->y_max(),
+	);
+
+	if(defined $self->z_min() && defined $self->z_max()) {
+		$return .= sprintf("\tZ bounds(min=%s, max=%s)\n",
+			$self->z_min(),
+			$self->z_max(),
+		);
+	}
+
+	if(defined $self->m_min() && defined $self->m_max()) {
+		$return .= sprintf("\tM bounds(min=%s, max=%s)\n",
+			$self->m_min(),
+			$self->m_max(),
+		);
+	}
+
+	for(1 .. $self->num_parts()) {
+		$return .= "\tPart $_:\n";
+		foreach($self->get_part($_)) {
+			$return .= "\t\t$_\n";
+		}
+	}
+
+	$return .= "\n";
+
+	return $return;
+}
+
 1;
 __END__
 =head1 NAME
@@ -515,14 +644,26 @@ as contained in it's header information.
 
 Returns true if the point provided is one of the points in the shape.  Note
 that this does a simple comparison with the points that make up the shape, it
-will not find a point that falls along a connecting line between two points in
-the shape.  See the Geo::ShapeFile::Point documentation for a note about how
+will not find a point that falls along a vertex between two points in the
+shape.  See the Geo::ShapeFile::Point documentation for a note about how
 to exclude Z and/or M data from being considered when matching points.
 
 =item get_segments($part)
 
 Returns an array consisting of array hashes, which contain the points for
 each segment of a multi-segment part.
+
+=item centroid($part)
+
+Returns a Geo::ShapeFile::Point object containing the coordinates of the
+centroid of the object.  If $part is specified, it returns the centroid of
+only that part, otherwise it returns the centroid for the entire shape.
+
+=item dump()
+
+Returns a text dump of the object, showing the shape type, id number, number
+of parts, number of total points, the bounds for the X, Y, Z, and M ranges,
+and the coordinates of the points in each part of the shape.
 
 =back
 

@@ -4,3 +4,9 @@ Revision history for Perl extension Geo::ShapeFile.
 	- original version; created by h2xs 1.22 with options
 		-X Geo::Shape
 
+1.5   Sun Feb 16 11:35:00 2003
+	- initial release
+
+2.0   No Date Yet
+	- fixed missing prerequisites in Makefile.PL
+	- initial support for creating new shapefiles
