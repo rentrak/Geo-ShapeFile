@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Geo-ShapeFile
-version:      2.50
+version:      2.51
 version_from: ShapeFile.pm
 installdirs:  site
 requires:

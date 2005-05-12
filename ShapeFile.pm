@@ -1,19 +1,11 @@
 package Geo::ShapeFile;
-
-#use 5.008;
 use strict;
 use warnings;
-
-require Exporter;
-use AutoLoader qw(AUTOLOAD);
 use Carp;
 use IO::File;
 use Geo::ShapeFile::Shape;
 
-our @ISA = qw(Exporter);
-our @EXPORT_OK = ();
-our @EXPORT = (); 
-our $VERSION = '2.50';
+our $VERSION = '2.51';
 
 # Preloaded methods go here.
 sub new {
@@ -851,6 +843,11 @@ Takes an array of Geo::ShapeFile::Shape objects, and returns a hash, with
 keys of x_min,y_min,x_max,y_max, with the values for each of those ranges.
 
 =back
+
+=head1 REPORTING BUGS
+
+Please send any bugs, suggestions, or feature requests to
+  E<lt>geo-shapefile-bugs@jasonkohles.comE<gt>.
 
 =head1 SEE ALSO
 

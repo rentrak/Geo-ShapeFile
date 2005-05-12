@@ -1,16 +1,11 @@
-Revision history for Perl extension Geo::ShapeFile.
+Revision history for Geo::ShapeFile.
 
-0.01  Wed Dec 11 15:27:53 2002
-    - original version; created by h2xs 1.22 with options
-        -X Geo::ShapeFile
-
-1.5   Sun Feb 16 11:35:00 2003
-    - initial release
-
-2.10  Mon Mar 17 14:59:00 2003
-    - fixed missing prerequisites in Makefile.PL
-    - initial support for creating new shapefiles
-    - removed some less-than-useful required modules
+2.51  Thu May 12 11:01:41 EDT 2005
+    - Corrected a stupid math problem in Geo::ShapeFile::Shape::centroid
+      function, reported by an anonymous rt.cpan.org user.
+    - Fixed a problem discovered by Celia Mackie, where some complex shape
+      types didn't have their Z and M values transferred into the points
+      correctly, making it difficult to access those values.
 
 2.50  Sat Jul  3 19:08:50 EDT 2004
     - things calming down at new job, more free time at home for pet projects.
@@ -34,3 +29,12 @@ Revision history for Perl extension Geo::ShapeFile.
       by one byte' bug first reported by Attila Csipa (sorry it took so long,
       I couldn't find data that reproduced it), patch submitted by
       Aleksandar Jelenak.
+
+2.10  Mon Mar 17 14:59:00 2003
+    - fixed missing prerequisites in Makefile.PL
+    - initial support for creating new shapefiles
+    - removed some less-than-useful required modules
+
+1.5   Sun Feb 16 11:35:00 2003
+    - initial release
+

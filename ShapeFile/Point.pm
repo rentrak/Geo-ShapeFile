@@ -1,11 +1,10 @@
 package Geo::ShapeFile::Point;
-
 # TODO - add dimension operators (to specify if 2 or 3 dimensional point)
-#use 5.008;
 use strict;
 use warnings;
 use Math::Trig;
 use Carp;
+our $VERSION = '2.51';
 
 use overload
 	'=='	=> 'eq',
@@ -21,14 +20,6 @@ my %config = (
 	comp_includes_z		=> 1,
 	comp_includes_m		=> 1,
 );
-
-require Exporter;
-use AutoLoader qw(AUTOLOAD);
-
-our @ISA = qw(Exporter);
-our @EXPORT_OK = qw( ); 
-our @EXPORT = qw( ); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.3 $, 10));
 
 sub new {
     my $proto = shift;
@@ -334,6 +325,11 @@ Returns the angle (in degress) from this point to some other point.  Returns
 0 if the two points are in the same location.
 
 =back
+
+=head1 REPORTING BUGS
+
+Please send any bugs, suggestions, or feature requests to
+  E<lt>geo-shapefile-bugs@jasonkohles.comE<gt>.
 
 =head1 SEE ALSO
 

@@ -1,7 +1,5 @@
-Geo/ShapeFile version 0.01
+Geo/ShapeFile version 2.51
 ==========================
-
-    *** Please report bugs at http://rt.cpan.org/ ***
 
 Geo::ShapeFile is a perl library for reading ESRI shape files (such as
 those produced by the ESRI Arc/Info application.
@@ -21,6 +19,13 @@ This module requires these other modules and libraries:
 
   Carp
   IO::File
+  Math::Trig
+  Test::More (if you want to run the tests)
+
+REPORTING BUGS
+
+Please report any bugs or problems by sending email to:
+geo-shapefile-bugs@jasonkohles.com
 
 EXAMPLES
 
@@ -28,7 +33,7 @@ Some example scripts (hopefully documented) can be found in the eg/ directory.
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2000-2003 Jason Kohles
+Copyright (C) 2000-2005 Jason Kohles
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 

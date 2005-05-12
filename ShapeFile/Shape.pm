@@ -1,28 +1,12 @@
 package Geo::ShapeFile::Shape;
-
-#use 5.008;
 use strict;
 use warnings;
 use Carp;
-
-require Exporter;
-use AutoLoader qw(AUTOLOAD);
 use Geo::ShapeFile;
 use Geo::ShapeFile::Point;
 
-our @ISA = qw(Exporter Geo::ShapeFile);
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration	use Geo::ShapeFile ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
-our %EXPORT_TAGS = ( 'all' => [ qw( ) ] ); 
-our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } ); 
-our @EXPORT = qw( ); 
-our $VERSION = sprintf("%.02f",(substr q$Revision: 2.3 $, 10));
+our @ISA = qw(Geo::ShapeFile);
+our $VERSION = '2.51';
 
 sub new {
     my $proto = shift;
@@ -430,6 +414,8 @@ sub extract_z_data {
 
 	$self->extract_doubles('shp_z_min','shp_z_max');
 	$self->extract_count_doubles($self->{shp_num_points}, 'shp_z_data');
+	my @zdata = @{delete $self->{shp_z_data}};
+	for(0 .. $#zdata) { $self->{shp_points}->[$_]->Z($zdata[$_]); }
 }
 
 sub extract_m_data {
@@ -437,6 +423,8 @@ sub extract_m_data {
 
 	$self->extract_doubles('shp_m_min','shp_m_max');
 	$self->extract_count_doubles($self->{shp_num_points}, 'shp_m_data');
+	my @mdata = @{delete $self->{shp_m_data}};
+	for(0 .. $#mdata) { $self->{shp_points}->[$_]->M($mdata[$_]); }
 }
 
 sub extract_parts_and_points {
@@ -499,8 +487,8 @@ sub centroid {
 	foreach(@points) { $cx += $_->X; $cy += $_->Y; }
 
 	new Geo::ShapeFile::Point(
-		X => ($cx * @points),
-		Y => ($cy * @points),
+		X => ($cx / @points),
+		Y => ($cy / @points),
 	);
 }
 
@@ -663,6 +651,11 @@ of parts, number of total points, the bounds for the X, Y, Z, and M ranges,
 and the coordinates of the points in each part of the shape.
 
 =back
+
+=head1 REPORTING BUGS
+
+Please send any bugs, suggestions, or feature requests to
+  E<lt>geo-shapefile-bugs@jasonkohles.comE<gt>.
 
 =head1 SEE ALSO
 
