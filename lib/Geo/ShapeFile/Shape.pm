@@ -6,7 +6,7 @@ use Geo::ShapeFile;
 use Geo::ShapeFile::Point;
 
 our @ISA = qw(Geo::ShapeFile);
-our $VERSION = '2.51';
+our $VERSION = '2.52';
 
 sub new {
     my $proto = shift;
@@ -307,8 +307,15 @@ sub extract_count_ints {
 sub extract_doubles {
 	my $self = shift;
 	my @what = @_;
+    my $size = 8;
+    my $template = 'd';
 
-	$self->extract_and_unpack(8, 'd', @what);
+    foreach ( @what ) {
+        my $tmp = substr( $self->{shp_data}, 0, $size, '' );
+        $self->{ $_ } = unpack( 'b', pack( 'S', 1 ) )
+            ? unpack( $template, $tmp )
+            : unpack( $template, scalar( reverse( $tmp ) ) );
+    }
 }
 
 sub extract_count_doubles {
@@ -317,8 +324,9 @@ sub extract_count_doubles {
 	my $label = shift;
 
 	my $tmp = substr($self->{shp_data},0,$count*8,'');
-	#my @tmp = unpack("d[$count]",$tmp);
-	my @tmp = unpack("d".$count,$tmp);
+    my @tmp = unpack( 'b', pack( 'S', 1 ) )
+        ? unpack( 'd'.$count, $tmp )
+        : reverse( unpack( 'd'.$count, scalar( reverse( $tmp ) ) ) );
 
 	$self->{$label} = [@tmp];
 }
@@ -329,7 +337,10 @@ sub extract_points {
 	my $label = shift;
 
 	my $data = substr($self->{shp_data},0,$count*16,'');
-	my @ps = unpack("d*",$data);
+
+    my @ps = unpack( 'b', pack( 'S', 1 ) )
+        ? unpack( 'd*', $data )
+        : reverse( unpack( 'd*', scalar( reverse( $data ) ) ) );
 
 	my @p = (); # points
 	while(@ps) {
@@ -346,6 +357,9 @@ sub extract_and_unpack {
 
 	foreach(@what) {
 		my $tmp = substr($self->{shp_data},0,$size,'');
+        if ( $template eq 'd' ) {
+            $tmp = Geo::ShapeFile->byteswap( $tmp );
+        }
 		$self->{$_} = unpack($template,$tmp);
 	}
 }
@@ -452,10 +466,37 @@ sub has_point {
 
 	foreach($self->points) {
 		return 1 if $_ == $point;
-		#if($point->X == $_->X && $point->Y == $_->Y) { return 1; }
 	}
 
 	return 0;
+}
+
+sub contains_point {
+    my ( $self, $point ) = @_;
+
+    return 0 unless $self->bounds_contains_point( $point );
+
+    my $a = 0;
+    my ( $x0, $y0 ) = ( $point->X, $point->Y );
+
+    for ( 1 .. $self->num_parts ) {
+        my ( $x1, $y1 );
+        for my $p2 ( $self->get_part( $_ ) ) {
+            my $x2 = $p2->X - $x0;
+            my $y2 = $p2->Y - $y0;
+
+            if ( defined( $y1 ) && ( ( $y2 >= 0 ) != ( $y1 >= 0 ) ) ) {
+                my $isl = $x1*$y2 - $y1*$x2;
+                if ( $y2 > $y1 ) {
+                    --$a if $isl > 0;
+                } else {
+                    ++$a if $isl < 0;
+                }
+            }
+            ( $x1, $y1 ) = ( $x2, $y2 );
+        }
+    }
+    return $a;
 }
 
 sub get_segments {
@@ -470,7 +511,7 @@ sub get_segments {
 	return @segments;
 }
 
-sub centroid {
+sub vertex_centroid {
 	my $self = shift;
 	my $part = shift;
 
@@ -490,6 +531,41 @@ sub centroid {
 		X => ($cx / @points),
 		Y => ($cy / @points),
 	);
+}
+*centroid = \&vertex_centroid;
+
+sub area_centroid {
+    my ( $self, $part ) = @_;
+
+    my ( $cx, $cy ) = ( 0, 0 );
+    my $A = 0;
+    
+    my @points;
+    my @parts = ();
+    if ( defined( $part ) ) {
+        @parts = ( $part );
+    } else {
+        @parts = 1 .. $self->num_parts;
+    }
+    for my $part ( @parts ) {
+        my ( $p0, @pts ) = $self->get_part( $part );
+        my ( $x0, $y0 ) = ( $p0->X, $p0->Y );
+        my ( $x1, $y1 ) = ( 0, 0 );
+        my ( $cxp, $cyp ) = ( 0, 0 );
+        my $Ap = 0;
+        for ( @pts ) {
+            my $x2 = $_->X - $x0;
+            my $y2 = $_->Y - $y0;
+            $Ap += ( my $a = $x2*$y1 - $x1*$y2 );
+            $cxp += $a * ( $x2 + $x1 ) / 3;
+            $cyp += $a * ( $y2 + $y1 ) / 3;
+            ( $x1, $y1 ) = ( $x2, $y2 );
+        }
+        $cx += $Ap * $x0 + $cxp;
+        $cy += $Ap * $y0 + $cyp;
+        $A += $Ap;
+    }
+    return Geo::ShapeFile::Point->new( X => ( $cx / $A ), Y => ( $cy / $A ) );
 }
 
 sub dump {
@@ -633,16 +709,43 @@ will not find a point that falls along a vertex between two points in the
 shape.  See the Geo::ShapeFile::Point documentation for a note about how
 to exclude Z and/or M data from being considered when matching points.
 
+=item contains_point($point);
+
+Returns true if the specified point falls in the interior of this shape
+and false if the point is outside the shape.  Return value is unspecified
+if the point is one of the vertices or lies on some segment of the
+bounding polygon.
+
+Note that the return value is actually a winding-number computed ignoring
+Z and M fields and so will be negative if the point is contained within a
+shape winding the wrong way.
+
 =item get_segments($part)
 
 Returns an array consisting of array hashes, which contain the points for
 each segment of a multi-segment part.
 
+=item vertex_centroid( $part );
+
+Returns a L<Geo::ShapeFile::Point> that represents the calculated centroid
+of the shapes vertices.  If given a part index, calculates just for that
+part, otherwise calculates it for the entire shape. See L</centroid> for
+more on vertex_centroid vs area_centroid.
+
+=item area_centroid( $part );
+
+Returns a L<Geo::ShapeFile::Point> that represents the calculated area
+centroid of the shape.  If given a part index, calculates just for that
+part, otherwise calculates it for the entire shape. See L</centroid> for
+more on vertex_centroid vs area_centroid.
+
 =item centroid($part)
 
-Returns a Geo::ShapeFile::Point object containing the coordinates of the
-centroid of the object.  If $part is specified, it returns the centroid of
-only that part, otherwise it returns the centroid for the entire shape.
+For backwards-compatibility reasons, centroid() is currently an alias to
+vertex_centroid(), although it would probably make more sense for it to
+point to area_centroid().  To avoid confusion (and possible future
+deprecation), you should avoid this and use either vertex_centroid or
+area_centroid.
 
 =item dump()
 

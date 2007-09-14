@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Math::Trig;
 use Carp;
-our $VERSION = '2.51';
+our $VERSION = '2.52';
 
 use overload
 	'=='	=> 'eq',
@@ -14,6 +14,7 @@ use overload
 	'-'		=> \&subtract,
 	'*'		=> \&multiply,
 	'/'		=> \&divide,
+    fallback    => 1
 ;
 
 my %config = (
@@ -70,9 +71,11 @@ sub eq {
 	my $right = shift;
 
 	if($config{comp_includes_z} && (defined $left->Z || defined $right->Z)) {
+        return 0 unless defined $left->Z && defined $right->Z;
 		return 0 unless $left->Z == $right->Z;
 	}
 	if($config{comp_includes_m} && (defined $left->M || defined $right->M)) {
+        return 0 unless defined $left->M && defined $right->M;
 		return 0 unless $left->M == $right->M;
 	}
 	return ($left->X == $right->X && $left->Y == $right->Y);

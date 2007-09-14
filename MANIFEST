@@ -1,11 +1,11 @@
-eg/shpdump
 Changes
 MANIFEST			This list of files
 Makefile.PL
 README
-ShapeFile.pm
-ShapeFile/Point.pm
-ShapeFile/Shape.pm
+lib/Geo/ShapeFile.pm
+lib/Geo/ShapeFile/Point.pm
+lib/Geo/ShapeFile/Shape.pm
+eg/shpdump
 t/main_tests.t
 t/test_data.pl
 t/test_data/anno.aux
