@@ -86,7 +86,7 @@ sub cache {
 
     return unless $self->caching($type);
 
-    if($@) {
+    if (@_) {
         $self->{_object_cache}->{$type}->{$obj} = shift;
     }
     return $self->{_object_cache}->{$type}->{$obj};
